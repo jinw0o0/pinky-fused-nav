@@ -1,0 +1,379 @@
+amcl:
+  ros__parameters:
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+    base_frame_id: "base_footprint"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 100.0
+    laser_min_range: -1.0
+    laser_model_type: "likelihood_field"
+    max_beams: 60
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.1
+    update_min_d: 0.15
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+    scan_topic: scan
+    set_initial_pose: true
+    initial_pose: [0, 0, 0]
+
+bt_navigator:
+  ros__parameters:
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    wait_for_service_timeout: 1000
+    action_server_result_timeout: 900.0
+    navigators: ["navigate_to_pose", "navigate_through_poses"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
+    navigate_through_poses:
+      plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
+    # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
+    # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
+    # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
+    # They can be set here or via a RewrittenYaml remap from a parent launch file to Nav2.
+
+    # plugin_lib_names is used to add custom BT plugins to the executor (vector of strings).
+    # Built-in plugins are added automatically
+    # plugin_lib_names: []
+
+    error_code_names:
+      - compute_path_error_code
+      - follow_path_error_code
+
+controller_server:
+  ros__parameters:
+    # --- 시스템 기본 설정 ---
+    /bond_disable_heartbeat_timeout: true    # 라이프사이클 노드 간 상태 체크(하트비트) 타임아웃 무시 여부
+
+    # ==========================================================
+    # 1. 주행 컨트롤러 (Regulated Pure Pursuit) 파라미터
+    # ==========================================================
+    FollowPath:
+      plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
+      stateful: true                         # 플러그인이 이전 상태를 기억할지 여부
+
+      # 기본 주행 및 속도
+      desired_linear_vel: 0.2                # [m/s] 목표 기본 직진 속도
+      allow_reversing: false                 # 후진 허용 여부 (false: 무조건 전진/제자리 회전으로 해결)
+      max_angular_accel: 3.2                 # [rad/s^2] 최대 각가속도 (회전할 때 얼마나 빨리 가속할지)
+
+      # 경로 추종 (Lookahead, 시선 두기)
+      lookahead_dist: 0.6                    # [m] 기본 전방 주시 거리
+      use_velocity_scaled_lookahead_dist: true # 현재 속도에 비례해 주시 거리를 늘릴지 여부
+      lookahead_time: 1.5                    # [s] 속도 비례 주시 시간 (속도 * 시간 = 주시 거리)
+      min_lookahead_dist: 0.3                # [m] 최소 주시 거리
+      max_lookahead_dist: 0.9                # [m] 최대 주시 거리
+      curvature_lookahead_dist: 0.6          # [m] 경로의 곡률(커브)을 계산하기 위해 내다보는 거리
+      use_fixed_curvature_lookahead: false   # 곡률 계산용 거리를 고정값으로 쓸지 여부 (false면 주시거리와 연동)
+
+      # 제자리 회전 (고개 먼저 돌리기)
+      use_rotate_to_heading: true            # 경로 방향과 로봇 헤딩이 다를 때 제자리 회전 먼저 하기
+      rotate_to_heading_min_angle: 0.35      # [rad] 약 20도 이상 차이나면 제자리 회전 모드 진입
+      rotate_to_heading_angular_vel: 1.0     # [rad/s] 제자리 회전할 때의 회전 속도
+
+      # 커브길 감속 (Regulated)
+      use_regulated_linear_velocity_scaling: false  # 급커브에서 속도 줄이기
+      regulated_linear_scaling_min_radius: 0.5     # [m] 이 반경보다 좁은 커브를 돌 때는 속도를 최소로 낮춤
+      regulated_linear_scaling_min_speed: 0.05     # [m/s] 커브를 돌 때 낼 수 있는 최소 속도 방어선
+
+      # 장애물 접근 시 감속 (Cost Regulated)
+      use_cost_regulated_linear_velocity_scaling: true # 장애물 근처(비용맵 높은 곳)에서 속도 줄이기
+      cost_scaling_dist: 0.6                 # [m] 장애물 중심으로부터 이 거리 안쪽일 때 감속 고려
+      cost_scaling_gain: 1.5                 # 장애물 감속 민감도 (클수록 더 팍 줄임)
+      inflation_cost_scaling_factor: 3.0     # 컨트롤러 내부에서 비용을 계산할 때 쓰는 인플레이션 가중치
+
+      # 목적지 접근 시 감속
+      approach_velocity_scaling_dist: 0.6    # [m] 목표 지점까지 이 거리만큼 남았을 때부터 서서히 감속
+      min_approach_linear_velocity: 0.05     # [m/s] 목표 지점 근처에서 속도를 줄이더라도 이 속도 밑으론 안 내림
+
+      # 안전 및 충돌 방지
+      use_collision_detection: true          # 현재 위치부터 주시점(Lookahead)까지 충돌 여부 미리 검사
+      max_allowed_time_to_collision_up_to_carrot: 1.0 # 주시점(Carrot)까지 가는 도중 충돌까지 허용되는 최대 시간 
+      max_robot_pose_search_dist: 1.4875     # [m] 전역 경로 상에서 로봇과 가장 가까운 점을 찾을 때 최대 탐색 거리
+      transform_tolerance: 0.2               # [s] TF(좌표계 변환) 데이터 최대 허용 지연 시간
+
+      # 취소/종료 시 동작
+      use_cancel_deceleration: false         # 내비게이션 취소 명령이 들어왔을 때 팍 멈추지 않고 부드럽게 감속할지
+      cancel_deceleration: 3.2               # [m/s^2] 취소 시 적용할 감속도
+      interpolate_curvature_after_goal: false # 목표 도달 후 경로 곡률 보간을 계속할지 여부
+
+    # ==========================================================
+    # 2. 컨트롤러 서버 공통 설정
+    # ==========================================================
+    controller_plugins: ["FollowPath"]           # 메인 주행 플러그인 (위에서 설정한 이름)
+    controller_frequency: 20.0                   # [Hz] 제어 명령(cmd_vel)을 1초에 20번 내보냄
+    action_server_result_timeout: 10.0           # [s] 액션 서버 결과 대기 최대 시간
+    autostart_node: false                        # 노드 켤 때 자동 활성화 여부
+    bond_heartbeat_period: 0.1                   # [s] 시스템 상태 체크(하트비트) 주기
+    costmap_update_timeout: 0.3                  # [s] 코스트맵 업데이트가 이 시간 지연되면 멈춤
+    enable_stamped_cmd_vel: false                # TwistStamped 메시지 대신 일반 Twist 메시지 사용
+    failure_tolerance: 0.3                       # [s] 제어 계산 실패를 허용하는 시간
+    publish_zero_velocity: true                  # 목표 도달/취소 시 확실하게 정지하도록 0 속도 명령 발행
+    speed_limit_topic: "speed_limit"             # 속도 제한 구역 적용 시 구독할 토픽 이름
+    odom_topic: "odom"                           # 현재 속도를 읽어올 오도메트리 토픽
+    use_realtime_priority: false                 # 리눅스 실시간(Realtime) 우선순위 사용 여부
+    use_sim_time: false                          # 시뮬레이션 시간 사용 여부 (실제 로봇이므로 false)
+    start_type_description_service: true         # 파라미터 타입 설명 서비스 활성화
+
+    # 미세한 노이즈 속도는 0으로 간주하는 임계치
+    min_theta_velocity_threshold: 0.001
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+
+    # ==========================================================
+    # 3. 목표 도달 판별 (Goal Checker)
+    # ==========================================================
+    goal_checker_plugins: ["general_goal_checker"]
+
+    general_goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      stateful: true
+      xy_goal_tolerance: 0.25                    # [m] 목표 지점 반경 0.25m 안에 들어오면 도착 인정
+      yaw_goal_tolerance: 0.25                   # [rad] 목표 각도 오차 약 14도 이내면 올바르게 본 것으로 인정
+
+    # ==========================================================
+    # 4. 주행 진척도 검사 (Progress Checker)
+    # ==========================================================
+    # 로봇이 좁은 곳에 갇혔거나 끼었는지 판별하는 기능
+    progress_checker_plugins: ["progress_checker"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      movement_time_allowance: 10.0              # [s] 이 시간 동안 아래 거리만큼 못 움직이면 끼인 것으로 판단
+      required_movement_radius: 0.5              # [m] 위 시간 동안 최소 0.5m 반경은 벗어나야 함 (못 벗어나면 Recovery 실행)
+
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_footprint
+      rolling_window: true
+      width: 3
+      height: 3
+      resolution: 0.05
+      #robot_radius: 0.22
+      footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
+      plugins: ["voxel_layer", "stvl_layer", "inflation_layer"]
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.15
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
+      # ---- Depth camera (Astra Pro) "기억형" 장애물 레이어 ----
+      # 미리 본 낮은/돌출 장애물을 odom 좌표에 마킹 → 0.6m 사각에 들어가도 시간감쇠로 유지(=기억)
+      # 라이다(voxel_layer)는 근접·전방위 주센서, STVL 은 전방 0.6m+ 보조(회피 주역)
+      stvl_layer:
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
+        enabled: true
+        voxel_decay: 2.5            # [s] 선형 감쇠. ~2초 통과를 견디고 그 뒤 소멸 (기억 시간)
+        decay_model: 0             # 0=linear, 1=exp, -1=persistent
+        voxel_size: 0.05
+        track_unknown_space: false # ★ 좁은 전방 FOV → 미관측을 unknown 으로 칠하지 않음(free)
+        mark_threshold: 0
+        update_footprint_enabled: true
+        combination_method: 1      # 1=max (라이다 레이어와 max 결합 → 카메라는 장애물만 추가)
+        obstacle_range: 3.0
+        origin_z: 0.0
+        publish_voxel_map: true    # 튜닝 끝나면 false
+        transform_tolerance: 0.2
+        mapping_mode: false
+        observation_sources: depth_camera
+        depth_camera:
+          data_type: PointCloud2
+          topic: /camera/depth/points
+          sensor_frame: camera_depth_optical_frame
+          marking: true
+          clearing: true
+          min_obstacle_height: 0.03   # [m] 바닥 위 → 낮은 장애물 마킹, 바닥 제외
+          max_obstacle_height: 1.6    # [m] up-tilt 라 사람 몸통/높은 장애물까지 포착
+          obstacle_range: 2.5
+          min_z: 0.05                 # [m] 클리어 절두체 하한(바닥 위) → 바닥/사각 오삭제 방지
+          max_z: 1.6
+          vertical_fov_angle: 0.864   # [rad] Astra Pro V 49.5°
+          horizontal_fov_angle: 1.047 # [rad] Astra Pro H 60°
+          decay_acceleration: 1.0     # 낮을수록 사각 기억 강함 (0=시간감쇠만)
+          model_type: 0               # 0=depth camera
+          clear_after_reading: true
+          filter: "voxel"
+          voxel_min_points: 2
+          enabled: true
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      always_send_full_costmap: True
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      footprint_padding: 0.03
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_footprint
+      #robot_radius: 0.22
+      footprint: '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
+      resolution: 0.05
+      track_unknown_space: true
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        # Phase 2: GLOBAL costmap consumes the fused scan (LiDAR + height-gated,
+        # floor-rejected depth) so low 1-25cm obstacles enter route planning.
+        # LOCAL costmap stays on /scan + STVL on purpose (see scan_fusion_design.md).
+        observation_sources: scan
+        scan:
+          topic: /scan_fused
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.15
+      always_send_full_costmap: True
+
+# The yaml_filename does not need to be specified since it going to be set by defaults in launch.
+# If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py
+# file & provide full path to map below. If CLI map configuration or launch default is provided, that will be used.
+# map_server:
+#   ros__parameters:
+#     yaml_filename: ""
+
+map_saver:
+  ros__parameters:
+    save_map_timeout: 5.0
+    free_thresh_default: 0.25
+    occupied_thresh_default: 0.65
+    map_subscribe_transient_local: True
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0
+    planner_plugins: ["GridBased"]
+    costmap_update_timeout: 1.0
+    GridBased:
+      plugin: "nav2_navfn_planner::NavfnPlanner"
+      tolerance: 0.5
+      use_astar: false
+      allow_unknown: true
+
+smoother_server:
+  ros__parameters:
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: True
+
+behavior_server:
+  ros__parameters:
+    local_costmap_topic: local_costmap/costmap_raw
+    global_costmap_topic: global_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    global_footprint_topic: global_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    spin:
+      plugin: "nav2_behaviors::Spin"
+    backup:
+      plugin: "nav2_behaviors::BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors::DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors::Wait"
+    assisted_teleop:
+      plugin: "nav2_behaviors::AssistedTeleop"
+    local_frame: odom
+    global_frame: map
+    robot_base_frame: base_footprint
+    transform_tolerance: 0.1
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 1.0
+    min_rotational_vel: 0.4
+    rotational_acc_lim: 3.2
+    enable_stamped_cmd_vel: false
+
+waypoint_follower:
+  ros__parameters:
+    loop_rate: 20
+    stop_on_failure: false
+    action_server_result_timeout: 900.0
+    waypoint_task_executor_plugin: "wait_at_waypoint"
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: True
+      waypoint_pause_duration: 200
+
+velocity_smoother:
+  ros__parameters:
+    smoothing_frequency: 20.0
+    scale_velocities: False
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.25, 0.0, 1.5]
+    min_velocity: [-0.25, 0.0, -1.5]
+    max_accel: [2.5, 0.0, 3.2]
+    max_decel: [-2.5, 0.0, -3.2]
+    odom_topic: "odom"
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
+    enable_stamped_cmd_vel: false

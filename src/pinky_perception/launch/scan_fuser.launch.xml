@@ -1,0 +1,12 @@
+<?xml version='1.0' ?>
+<launch>
+    <arg name="params_file" default="$(find-pkg-share pinky_perception)/config/scan_fuser.yaml"/>
+    <arg name="use_sim_time" default="False"/>
+
+    <!-- Fuses /camera/depth/points (floor-rejected, height-gated) + /scan (self-masked) -->
+    <!-- into a single /scan_fused LaserScan in base_footprint, for slam + global costmap. -->
+    <node pkg="pinky_perception" exec="scan_fuser" name="scan_fuser" output="screen">
+        <param from="$(var params_file)"/>
+        <param name="use_sim_time" value="$(var use_sim_time)"/>
+    </node>
+</launch>

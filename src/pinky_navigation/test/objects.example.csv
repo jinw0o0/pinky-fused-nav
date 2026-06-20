@@ -1,0 +1,13 @@
+# Known calibration objects for `score_map.py object` (design doc §7).
+# Place real objects at MEASURED map coordinates (origin = mapping start pose,
+# +x forward, +y left), record Bag OBJECT, then fill x,y here.
+#
+# columns: label, x[m], y[m], height_cm, required|optional
+#   required -> must be detected in the FUSED map (counts toward PASS/FAIL)
+#   optional -> reported but does not fail the run (e.g. far/edge cases)
+#
+# Headline claim: a 2 cm object at 0.8 m MUST pass (it is below the 12.5 cm lidar
+# plane, so depth_unique=Y proves the fused pipeline added value).
+blk2,   0.80, 0.00,  2, required
+box10,  1.50, 0.00, 10, required
+box24,  2.50, 0.00, 24, optional

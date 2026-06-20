@@ -1,0 +1,53 @@
+# scan_fuser — fuses depth cloud + LiDAR into /scan_fused (base_footprint, 720 bins).
+# ⚠️ ALL numeric thresholds are PROVISIONAL — confirm on-robot (Stage A calibration, RViz).
+scan_fuser:
+  ros__parameters:
+    use_sim_time: false
+
+    # --- frames / topics ---
+    target_frame: base_footprint     # gravity-aligned output frame (z=0 = floor)
+    cloud_topic: /camera/depth/points
+    scan_topic: /scan
+    fused_topic: /scan_fused
+
+    # --- output LaserScan grid (must be self-consistent for slam_toolbox) ---
+    num_bins: 720                    # 0.5 deg; match LiDAR C1 DenseBoost density
+    range_min: 0.12
+    range_max: 8.0                   # = slam scan_buffer_maximum_scan_distance
+    publish_rate: 12.0               # [Hz] timer publish cadence (fresh LiDAR every tick)
+
+    # --- depth processing (heavy; throttled) ---
+    depth_process_rate: 6.0          # [Hz] cloudCb throttle (decision ④). 5-8 typical
+    pixel_step: 2                    # structured subsample u,v stride before PCL
+    voxel_leaf: 0.02                 # [m] VoxelGrid leaf
+    voxel_min_points: 3              # min points per voxel (kills single-pixel flyers)
+    sor_mean_k: 10                   # StatisticalOutlierRemoval neighbours
+    sor_stddev: 1.0
+
+    # --- RANSAC ground-plane removal (the real floor killer, decision/Stage C) ---
+    ground_enable: true
+    ground_max_z: 0.10               # only fit plane to points below this (base_footprint z)
+    ground_dist_thresh: 0.02         # RANSAC inlier distance
+    ground_normal_z_min: 0.95        # only remove plane if |normal.z| > this (don't eat walls)
+    ground_eps_angle_deg: 10.0       # perpendicular-plane axis tolerance
+
+    # --- height gate (two-tier, applied in base_footprint AFTER ground removal) ---
+    gate_near_range: 1.2             # [m] boundary between near/far tiers
+    gate_min_height_near: 0.02       # near tier lower bound (≤ gate_near_range)
+    gate_min_height_far: 0.05        # far tier lower bound (> gate_near_range)
+    gate_max_height: 0.25            # upper bound (1-25cm band)
+    depth_range_min: 0.58            # [m] depth HW min range
+    depth_range_max: 3.0             # [m] certified zone; beyond -> trust LiDAR
+    depth_angle_min: -0.5236         # [rad] -30 deg (real H-FOV 60 deg)
+    depth_angle_max: 0.5236          # [rad] +30 deg
+
+    # --- LiDAR self-occlusion mask (NEW; ignore body-blocked sectors) ---
+    # Flat list of [min,max] pairs in DEGREES, base_footprint frame. Sectors inside -> ignored.
+    # ⚠️ MEASURE on-robot in RViz (/scan) first. Use FLOATS (170.0, not 170).
+    # NOTE: ROS 2 cannot type an empty yaml array ([]) -> it crashes the node.
+    #       Keep this COMMENTED OUT while no sectors are masked (code default = empty).
+    #       Uncomment & fill once measured, e.g.:
+    # lidar_ignore_sectors_deg: [170.0, 190.0, -50.0, -30.0]   # rear ~180 + right-rear bracket
+
+    # --- staleness ---
+    depth_stale_timeout: 0.2         # [s] if depth older -> fused = pure LiDAR

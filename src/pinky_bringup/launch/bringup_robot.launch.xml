@@ -1,0 +1,89 @@
+<?xml version='1.0' ?>
+
+<launch>
+    <arg name="use_sim_time" default="False"/>
+    <arg name="wheel_radius" default="0.027"/>
+    <arg name="wheel_separation" default="0.0961"/>
+    <arg name="use_depth_camera" default="True"/>
+    <!-- Astra Pro UVC 컬러가 현재 SIGSEGV 로 죽음 → 기본 끔(depth-only, STVL 회피용). -->
+    <!-- 추종(2차) 단계에서 컬러 크래시 해결 후 use_color:=True 로 켬. -->
+    <arg name="use_color" default="False"/>
+
+    <!-- IMU (BNO055): publishes imu_raw (frame imu_link) for robot_localization EKF -->
+    <arg name="use_imu" default="True"/>
+    <!-- 2026-06-20: BNO055가 HW i2c-0(GPIO0/1)에서 클록 스트레칭 락업 → 같은 핀에 소프트웨어
+         i2c(i2c-gpio, /dev/i2c-10) 구성. config.txt: i2c_vc off + dtoverlay=i2c-gpio,bus=10,
+         i2c_gpio_sda=0,i2c_gpio_scl=1. 상세 [[pinky-imu-i2c-clockstretch]]. -->
+    <arg name="imu_interface" default="/dev/i2c-10"/>
+
+    <!-- scan_fuser: LiDAR + height-gated/floor-rejected depth -> /scan_fused (base_footprint) -->
+    <arg name="use_scan_fuser" default="True"/>
+
+    <include file="$(find-pkg-share pinky_description)/launch/upload_robot.launch.py">
+        <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    </include>
+
+    <include file="$(find-pkg-share sllidar_ros2)/launch/sllidar_c1_launch.py">
+        <arg name="serial_port" value="/dev/ttyAMA0"/>
+        <arg name="frame_id" value="rplidar_link"/>
+        <arg name="inverted" value="false"/>
+        <arg name="angle_compensate" value="true"/>
+        <arg name="scan_mode" value="DenseBoost"/>
+    </include>
+
+    <!-- Depth camera (Orbbec Astra Pro) on top of the lidar -->
+    <!-- camera_name 은 URDF 의 'camera_link' 접두사와 일치해야 함 -->
+    <!-- 방식 A: publish_tf 기본값(true) 유지 → camera_link 아래 프레임은 드라이버가 publish -->
+    <!-- ★ Astra Pro 전용 런치: 컬러(RGB)는 OpenNI 가 아니라 별도 UVC 웹캠으로 들어옴 -->
+    <!-- Pi 5 8GB 튜닝: depth(STVL 회피용) + color(2차 사람 추종용) 동시, 15fps 로 헤드룸 확보 -->
+    <include file="$(find-pkg-share astra_camera)/launch/astra_pro.launch.xml" if="$(var use_depth_camera)">
+        <arg name="camera_name" value="camera"/>
+
+        <!-- Depth: 장애물 회피(STVL)용. cloud frame = camera_depth_optical_frame -->
+        <arg name="enable_depth" value="true"/>
+        <arg name="depth_width" value="640"/>
+        <arg name="depth_height" value="480"/>
+        <arg name="depth_fps" value="15"/>
+        <arg name="enable_point_cloud" value="true"/>          <!-- /camera/depth/points → STVL -->
+        <arg name="depth_registration" value="false"/>        <!-- Astra Pro 는 HW 정합 미지원(컬러=별도 UVC) -->
+
+        <!-- Color: 사람 추종(2차)용. UVC 경로. use_color 로 on/off (현재 UVC 크래시로 기본 off) -->
+        <arg name="enable_color" value="$(var use_color)"/>
+        <arg name="use_uvc_camera" value="$(var use_color)"/>
+        <arg name="uvc_vendor_id" value="0x2bc5"/>
+        <arg name="uvc_product_id" value="0x0501"/>            <!-- 실제 lsusb 로 확인 후 보정 -->
+        <arg name="color_width" value="640"/>
+        <arg name="color_height" value="480"/>
+        <arg name="color_fps" value="30"/>
+        <!-- ★ MJPEG 디코딩이 arm64 에서 SIGSEGV → YUYV 로 강제 (Orbbec 권장, 640x480@30) -->
+        <arg name="uvc_camera_format" value="yuyv"/>
+
+        <!-- 불필요 스트림 끔 (CPU/USB 절약) -->
+        <arg name="enable_ir" value="false"/>
+        <arg name="enable_colored_point_cloud" value="false"/>
+    </include>
+
+    <!-- IMU (BNO055) → imu_raw (frame imu_link), for robot_localization EKF -->
+    <node pkg="pinky_imu_bno055" exec="main_node" name="pinky_imu_bno055" output="screen" if="$(var use_imu)">
+        <param name="interface" value="$(var imu_interface)"/>
+        <param name="frame_id" value="imu_link"/>
+        <param name="rate" value="100.0"/>
+    </node>
+
+    <!-- scan_fuser: fuses /scan + /camera/depth/points -> /scan_fused (base_footprint). -->
+    <!-- Co-located with its sources (lidar+camera above) so /scan_fused exists for both -->
+    <!-- mapping (RViz/bag verify) and navigation (global costmap consumes it). -->
+    <include file="$(find-pkg-share pinky_perception)/launch/scan_fuser.launch.xml" if="$(var use_scan_fuser)">
+        <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    </include>
+
+    <node pkg="pinky_bringup" exec="bringup">
+        <param from="$(find-pkg-share pinky_bringup)/config/pinky_params.yaml"/>
+        <param name="wheel_radius" value="$(var wheel_radius)"/>
+        <param name="wheel_separation" value="$(var wheel_separation)"/>
+    </node>
+    
+    <node pkg="pinky_bringup" exec="battery_publisher">
+    </node>
+    
+</launch>

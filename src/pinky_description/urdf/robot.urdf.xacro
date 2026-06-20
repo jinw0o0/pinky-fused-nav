@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="pinky">
+    <xacro:include filename="$(find pinky_description)/urdf/pinky.urdf.xacro"/>
+
+    <xacro:arg name="namespace" default=""/>
+    <xacro:arg name="is_sim" default="false"/>
+    <xacro:arg name="cam_tilt_deg" default="8"/>
+    <xacro:arg name="screen_tilt_deg" default="-25"/>
+    <!-- depth 카메라 상하 틸트(도). 양수=아래로 숙임, 음수=위로(up-tilt). -->
+    <!-- 하드웨어상 위로 설치됨. Astra Pro V-FOV 49.5° + 바닥0.175m + 바닥가시 0.58m 역산 → 추정 -8.0°. -->
+    <!-- RViz 에서 바닥 점군 평탄 확인으로 미세조정. -->
+    <!-- 2026-06-20 Stage A 벽 캘리브레이션(stage_a_wall_pitch.py): 정면 평벽 normal nz=-0.054
+         → pitch 오차 -3.1° → -8.0 보정 -4.9°. 바닥 grazing이라 floor-fit은 못 믿음, 벽 normal로 측정. -->
+    <xacro:arg name="depth_cam_tilt_deg" default="-4.9"/>
+
+    <xacro:insert_robot namespace="$(arg namespace)"
+                        is_sim="$(arg is_sim)"
+                        cam_tilt_deg="$(arg cam_tilt_deg)"
+                        screen_tilt_deg="$(arg screen_tilt_deg)"
+                        depth_cam_tilt_deg="$(arg depth_cam_tilt_deg)"/>
+</robot>

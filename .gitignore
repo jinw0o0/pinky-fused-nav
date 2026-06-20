@@ -1,0 +1,8 @@
+.env
+build/
+install/
+log/
+.venv/
+__pycache__/
+.vscode/
+개인프로젝트/

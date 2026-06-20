@@ -1,0 +1,22 @@
+<?xml version='1.0'?>
+<!-- web_nav2 와 동일하나 글로벌=Smac 2D + 컨트롤러=MPPI params 사용 -->
+<!-- 기존 web_nav2.launch.xml(NavFn+RPP)은 그대로 두고, 이걸로 전환 테스트 -->
+<launch>
+    <arg name="map" default=""/>
+    <arg name="ip" default="0.0.0.0"/>
+    <arg name="port" default="8080"/>
+    <arg name="use_sim_time" default="False"/>
+    <arg name="params_file" default="$(find-pkg-share pinky_navigation)/params/nav2_params_smac_mppi.yaml"/>
+
+    <node pkg="pinky_navigation" exec="nav2_web_server.py" name="nav2_web_server" output="screen">
+        <param name="ip" value="$(var ip)"/>
+        <param name="port" value="$(var port)"/>
+    </node>
+
+    <include file="$(find-pkg-share pinky_navigation)/launch/bringup_launch.xml">
+        <arg name="params_file" value="$(var params_file)"/>
+        <arg name="map" value="$(var map)"/>
+        <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    </include>
+
+</launch>
