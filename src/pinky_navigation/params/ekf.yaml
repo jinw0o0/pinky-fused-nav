@@ -1,0 +1,58 @@
+### robot_localization EKF — fuses wheel odom (/odom) + BNO055 IMU (/imu_raw)
+### → smooth odom->base_footprint TF. Run bringup with publish_tf:=false so this owns that TF.
+###
+### FIRST PASS (Phase 1b): yaw-RATE fusion only (no absolute magnetometer heading) → robust
+### indoors; the odom frame is allowed to drift in heading (absolute correction comes later from
+### map/AMCL in nav). Split: wheels own translation (vx), IMU gyro owns rotation (vyaw).
+### Tune covariances / add absolute yaw after replaying ~/ekf_bag1 and comparing
+### /odometry/filtered vs raw /odom.
+ekf_filter_node:
+  ros__parameters:
+    frequency: 20.0                  # 20Hz: matches controller_frequency; eases Pi5 CPU under full stack
+    sensor_timeout: 0.1
+    two_d_mode: true                 # planar robot → force z, roll, pitch (and their rates) to 0
+    transform_time_offset: 0.0
+    transform_timeout: 0.0
+    print_diagnostics: true
+    debug: false
+    publish_tf: true                 # EKF publishes odom->base_footprint (replaces bringup's raw TF)
+    publish_acceleration: false
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom                # estimate continuous odom->base; map correction is separate
+
+    # ----- wheel odometry (/odom from pinky_bringup) -----
+    # config order: x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az
+    odom0: /odom
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  false, false,
+                   false, false, false,
+                   false, false, false]   # fuse vx only (translation). Wheel pose/yaw drifts → not fused.
+    odom0_queue_size: 10
+    odom0_differential: false
+    odom0_relative: false
+    odom0_nodelay: true
+
+    # ----- IMU (/imu_raw, BNO055 @100Hz) -----
+    imu0: /imu_raw
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]    # fuse vyaw (gyro yaw-rate; far better than wheel-derived).
+                                          # To add ABSOLUTE heading later: set the 6th flag (yaw) true
+                                          # ONLY if BNO055 heading proves stable indoors (mag-dependent).
+                                          # To add forward accel: set 13th (ax) true if odom vx is poor.
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 10
+    imu0_remove_gravitational_acceleration: true
+    imu0_nodelay: true
+
+    # NOTE (tuning): robot_localization uses the COVARIANCES carried in /odom and /imu_raw msgs.
+    # If pinky_bringup publishes /odom with an all-zero covariance, the filter can misbehave —
+    # check during replay and, if so, set a small constant covariance in bringup.py (vx, vyaw).
+    # process_noise_covariance / initial_estimate_covariance left at rl defaults for the first pass.

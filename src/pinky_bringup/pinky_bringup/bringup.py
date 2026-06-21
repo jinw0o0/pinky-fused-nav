@@ -193,6 +193,21 @@ class Pinky(Node):
         q = quaternion_from_euler(0, 0, self.theta)
         odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z, odom_msg.pose.pose.orientation.w = q
         odom_msg.twist.twist.linear.x, odom_msg.twist.twist.angular.z = v_x, vth
+        # Covariances for robot_localization EKF (diagonal). Without these the message covariance
+        # is all-zero → rl treats odom as infinitely certain and misbehaves. Fused DOFs (vx) get a
+        # small value; planar/unused DOFs (z, roll, pitch, vy, vz, ...) get large ones.
+        odom_msg.pose.covariance[0]   = 0.001   # x
+        odom_msg.pose.covariance[7]   = 0.001   # y
+        odom_msg.pose.covariance[14]  = 1e6     # z   (planar robot)
+        odom_msg.pose.covariance[21]  = 1e6     # roll
+        odom_msg.pose.covariance[28]  = 1e6     # pitch
+        odom_msg.pose.covariance[35]  = 0.02    # yaw
+        odom_msg.twist.covariance[0]  = 0.001   # vx   (fused by EKF)
+        odom_msg.twist.covariance[7]  = 1e6     # vy   (diff-drive: no lateral motion)
+        odom_msg.twist.covariance[14] = 1e6     # vz
+        odom_msg.twist.covariance[21] = 1e6     # vroll
+        odom_msg.twist.covariance[28] = 1e6     # vpitch
+        odom_msg.twist.covariance[35] = 0.02    # vyaw
         self.odom_pub.publish(odom_msg)
 
     def _publish_joint_states(self, current_time, rpm_l, rpm_r):

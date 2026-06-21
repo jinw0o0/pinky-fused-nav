@@ -1,0 +1,14 @@
+<?xml version='1.0' ?>
+<launch>
+    <!-- robot_localization EKF: fuses wheel /odom + BNO055 /imu_raw into the
+         odom to base_footprint transform. Run alongside bringup with
+         publish_tf:=false so this node owns that TF. For offline tuning, run
+         ekf_node with use_sim_time:=true while replaying the bag with clock. -->
+    <arg name="use_sim_time" default="false"/>
+    <arg name="params_file" default="$(find-pkg-share pinky_navigation)/params/ekf.yaml"/>
+
+    <node pkg="robot_localization" exec="ekf_node" name="ekf_filter_node" output="screen">
+        <param from="$(var params_file)"/>
+        <param name="use_sim_time" value="$(var use_sim_time)"/>
+    </node>
+</launch>

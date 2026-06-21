@@ -4,6 +4,9 @@
     <arg name="use_sim_time" default="False"/>
     <arg name="wheel_radius" default="0.027"/>
     <arg name="wheel_separation" default="0.0961"/>
+    <!-- publish_tf: bringup publishes odom->base_footprint. Set False to record the EKF golden
+         bag (robot_localization owns odom->base offline) or when the EKF runs live. -->
+    <arg name="publish_tf" default="True"/>
     <arg name="use_depth_camera" default="True"/>
     <!-- Astra Pro UVC 컬러가 현재 SIGSEGV 로 죽음 → 기본 끔(depth-only, STVL 회피용). -->
     <!-- 추종(2차) 단계에서 컬러 크래시 해결 후 use_color:=True 로 켬. -->
@@ -81,6 +84,7 @@
         <param from="$(find-pkg-share pinky_bringup)/config/pinky_params.yaml"/>
         <param name="wheel_radius" value="$(var wheel_radius)"/>
         <param name="wheel_separation" value="$(var wheel_separation)"/>
+        <param name="publish_tf" value="$(var publish_tf)"/>
     </node>
     
     <node pkg="pinky_bringup" exec="battery_publisher">
